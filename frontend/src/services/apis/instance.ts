@@ -3,6 +3,7 @@ import type { RemoteMappingEntry } from "@/tools/protocol";
 import type {
   InstanceDetail,
   JsonData,
+  MinecraftServerStatus,
   NewScheduleTask,
   QuickStartTemplate,
   Schedule
@@ -51,6 +52,19 @@ export const getInstanceInfo = useDefineApi<
   InstanceDetail
 >({
   url: "/api/instance",
+  method: "GET"
+});
+
+export const getInstanceServerStatus = useDefineApi<
+  {
+    params: {
+      uuid: string;
+      daemonId: string;
+    };
+  },
+  MinecraftServerStatus
+>({
+  url: "/api/protected_instance/server_status",
   method: "GET"
 });
 

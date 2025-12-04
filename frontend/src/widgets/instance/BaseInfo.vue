@@ -2,8 +2,9 @@
 import { useInstanceInfo } from "@/hooks/useInstance";
 import { t } from "@/lang/i18n";
 import type { LayoutCard } from "@/types";
+import { getInstanceServerStatus } from "@/services/apis/instance";
 import { CheckCircleOutlined, ExclamationCircleOutlined } from "@ant-design/icons-vue";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { GLOBAL_INSTANCE_NAME } from "../../config/const";
 import { useLayoutCardTools } from "../../hooks/useCardTools";
 import { parseTimestamp } from "../../tools/time";
@@ -26,6 +27,9 @@ const { statusText, isRunning, isStopped, instanceTypeText, instanceInfo, execut
     autoRefresh: true
   });
 
+const { state: serverStatusState, execute: fetchServerStatus } = getInstanceServerStatus();
+const serverStatusTimer = ref<ReturnType<typeof setInterval>>();
+
 const getInstanceName = computed(() => {
   if (instanceInfo.value?.config.nickname === GLOBAL_INSTANCE_NAME) {
     return t("TXT_CODE_5bdaf23d");
@@ -34,15 +38,69 @@ const getInstanceName = computed(() => {
   }
 });
 
+const refreshServerStatus = async () => {
+  if (!instanceId || !daemonId) return;
+  try {
+    await fetchServerStatus({
+      params: {
+        uuid: instanceId,
+        daemonId: daemonId
+      }
+    });
+  } catch (error) {
+    // ignore status errors
+  }
+};
+
+const clearServerStatusTimer = () => {
+  if (serverStatusTimer.value) {
+    clearInterval(serverStatusTimer.value);
+    serverStatusTimer.value = undefined;
+  }
+};
+
+watch(
+  () => isRunning.value,
+  async (running) => {
+    clearServerStatusTimer();
+    if (running) {
+      await refreshServerStatus();
+      serverStatusTimer.value = setInterval(refreshServerStatus, 15000);
+    } else {
+      serverStatusState.value = undefined;
+    }
+  },
+  { immediate: true }
+);
+
+const serverStatusText = computed(() => {
+  if (!isRunning.value) return t("TXT_CODE_15f2e564");
+  if (serverStatusState.value?.online) return t("TXT_CODE_bdb620b9");
+  if (serverStatusState.value) return t("TXT_CODE_15f2e564");
+  return t("TXT_CODE_c8333afa");
+});
+
+const serverStatusColor = computed(() => {
+  if (!isRunning.value) return "default";
+  if (serverStatusState.value?.online) return "green";
+  if (serverStatusState.value) return "red";
+  return "orange";
+});
+
 const instanceGameServerInfo = computed(() => {
+  if (serverStatusState.value?.online) {
+    return {
+      players: `${serverStatusState.value.currentPlayers} / ${serverStatusState.value.maxPlayers}`,
+      version: serverStatusState.value.version
+    };
+  }
   if (instanceInfo.value?.info?.mcPingOnline) {
     return {
       players: `${instanceInfo.value?.info.currentPlayers} / ${instanceInfo.value?.info.maxPlayers}`,
       version: instanceInfo.value?.info.version
     };
-  } else {
-    return null;
   }
+  return null;
 });
 
 onMounted(async () => {
@@ -54,6 +112,10 @@ onMounted(async () => {
       }
     });
   }
+});
+
+onUnmounted(() => {
+  clearServerStatusTimer();
 });
 </script>
 
@@ -80,6 +142,10 @@ onMounted(async () => {
           </a-tag>
           <a-tag v-else class="tag" color="pink">
             {{ statusText }}
+          </a-tag>
+
+          <a-tag class="tag" :color="serverStatusColor">
+            {{ t("TXT_CODE_server_status_label") }}: {{ serverStatusText }}
           </a-tag>
 
           <!-- instance type -->

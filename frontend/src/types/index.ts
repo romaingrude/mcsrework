@@ -44,6 +44,17 @@ export interface InstanceRuntimeInfo {
   }[];
 }
 
+export interface MinecraftServerStatus {
+  online: boolean;
+  latency: number;
+  version: string;
+  motd: string;
+  currentPlayers: number;
+  maxPlayers: number;
+  host?: string;
+  port?: number;
+}
+
 export interface InstanceDetail {
   instanceUuid: string;
   started: number;
