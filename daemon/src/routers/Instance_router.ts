@@ -7,7 +7,7 @@ import * as protocol from "../service/protocol";
 import { routerApp } from "../service/router";
 import InstanceSubsystem from "../service/system_instance";
 
-import { arrayUnique, toNumber } from "mcsmanager-common";
+import { MCServerStatus, arrayUnique, toNumber } from "mcsmanager-common";
 import ProcessInfoCommand from "../entity/commands/process_info";
 import { ProcessConfig } from "../entity/instance/process_config";
 import { TaskCenter } from "../service/async_task_service";
@@ -162,6 +162,52 @@ routerApp.on("instance/detail", async (ctx, data) => {
     });
   } catch (err: any) {
     protocol.error(ctx, "instance/detail", { err: err.message });
+  }
+});
+
+routerApp.on("instance/server_status", async (ctx, data) => {
+  const instanceUuid = data.instanceUuid;
+  const status = {
+    online: false,
+    latency: 0,
+    version: "",
+    motd: "",
+    currentPlayers: 0,
+    maxPlayers: 0,
+    host: "",
+    port: 0
+  };
+
+  try {
+    const instance = InstanceSubsystem.getInstance(instanceUuid);
+    if (!instance) throw new Error($t("TXT_CODE_3bfb9e04"));
+
+    const host = instance.config.pingConfig?.ip || instance.config.rconIp || "127.0.0.1";
+    const port =
+      toNumber(instance.config.pingConfig?.port) ||
+      toNumber(instance.config.rconPort) ||
+      toNumber(instance.config.basePort) ||
+      25565;
+
+    status.host = host;
+    status.port = port;
+
+    try {
+      const pingStatus = await new MCServerStatus(port, host).getStatus();
+      status.online = !!pingStatus?.online;
+      status.latency = toNumber(pingStatus?.latency) ?? 0;
+      status.version = pingStatus?.version ?? "";
+      status.motd = pingStatus?.motd ?? "";
+      status.currentPlayers = toNumber(pingStatus?.current_players) ?? 0;
+      status.maxPlayers = toNumber(pingStatus?.max_players) ?? 0;
+    } catch (error: any) {
+      status.online = false;
+      logger.warn(`Instance ${instanceUuid} ping status failed: ${error?.message ?? error}`);
+    }
+
+    protocol.msg(ctx, "instance/server_status", status);
+  } catch (err: any) {
+    protocol.error(ctx, "instance/server_status", { instanceUuid, err: err.message });
   }
 });
 
